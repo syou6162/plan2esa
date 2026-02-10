@@ -16,7 +16,12 @@ func main() {
 
 	// configPathが指定されていない場合はデフォルトパスを使用
 	if *configPath == "" {
-		*configPath = getDefaultConfigPath()
+		defaultPath, err := getDefaultConfigPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		*configPath = defaultPath
 	}
 
 	// 実際のEsaClientを作成（run内部で使用）

@@ -216,7 +216,11 @@ func TestGetDefaultConfigPath(t *testing.T) {
 		os.Setenv("XDG_CONFIG_HOME", "/tmp/xdg")
 		defer os.Unsetenv("XDG_CONFIG_HOME")
 
-		path := getDefaultConfigPath()
+		path, err := getDefaultConfigPath()
+		if err != nil {
+			t.Fatalf("getDefaultConfigPath() エラー = %v", err)
+		}
+
 		expected := "/tmp/xdg/plan2esa/config.yaml"
 
 		if path != expected {
@@ -227,7 +231,11 @@ func TestGetDefaultConfigPath(t *testing.T) {
 	t.Run("XDG_CONFIG_HOMEが未設定の場合", func(t *testing.T) {
 		os.Unsetenv("XDG_CONFIG_HOME")
 
-		path := getDefaultConfigPath()
+		path, err := getDefaultConfigPath()
+		if err != nil {
+			t.Fatalf("getDefaultConfigPath() エラー = %v", err)
+		}
+
 		homeDir, _ := os.UserHomeDir()
 		expected := filepath.Join(homeDir, ".config", "plan2esa", "config.yaml")
 

@@ -66,18 +66,17 @@ func validateConfig(config *Config) error {
 }
 
 // getDefaultConfigPath はデフォルトの設定ファイルパスを返します
-func getDefaultConfigPath() string {
+func getDefaultConfigPath() (string, error) {
 	if xdgConfigHome := os.Getenv("XDG_CONFIG_HOME"); xdgConfigHome != "" {
-		return filepath.Join(xdgConfigHome, "plan2esa", "config.yaml")
+		return filepath.Join(xdgConfigHome, "plan2esa", "config.yaml"), nil
 	}
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		// エラーの場合は相対パスにフォールバック
-		return ".config/plan2esa/config.yaml"
+		return "", fmt.Errorf("failed to get user home directory: %w", err)
 	}
 
-	return filepath.Join(homeDir, ".config", "plan2esa", "config.yaml")
+	return filepath.Join(homeDir, ".config", "plan2esa", "config.yaml"), nil
 }
 
 // getAccessToken は環境変数からアクセストークンを取得します
