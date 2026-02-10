@@ -120,7 +120,7 @@ func sanitizePostName(name string) string {
 }
 
 // buildPostName はタイトルを決定します
-func buildPostName(content, filename string) string {
+func buildPostName(content, filename string) (string, error) {
 	// まず見出しから抽出を試みる
 	title := extractTitle(content)
 
@@ -138,5 +138,10 @@ func buildPostName(content, filename string) string {
 		title = strings.TrimSpace(title)
 	}
 
-	return title
+	// 最終的に空文字の場合はエラー
+	if title == "" {
+		return "", errors.New("title is empty after sanitization")
+	}
+
+	return title, nil
 }

@@ -80,7 +80,10 @@ func run(configPath string, dryRun bool, poster EsaPoster) error {
 	// タイトルと本文を構築
 	contentStr := string(content)
 	filename := filepath.Base(planFile)
-	postName := buildPostName(contentStr, filename)
+	postName, err := buildPostName(contentStr, filename)
+	if err != nil {
+		return fmt.Errorf("failed to build post name: %w", err)
+	}
 	bodyMd := removeTitle(contentStr)
 
 	// カテゴリに日付を付与

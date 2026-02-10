@@ -196,7 +196,10 @@ func TestBuildPostName(t *testing.T) {
 内容`
 		filename := "plan.md"
 
-		result := buildPostName(content, filename)
+		result, err := buildPostName(content, filename)
+		if err != nil {
+			t.Fatalf("buildPostName() エラー = %v", err)
+		}
 		expected := "プランタイトル"
 
 		if result != expected {
@@ -208,7 +211,10 @@ func TestBuildPostName(t *testing.T) {
 		content := `内容のみ`
 		filename := "my-plan.md"
 
-		result := buildPostName(content, filename)
+		result, err := buildPostName(content, filename)
+		if err != nil {
+			t.Fatalf("buildPostName() エラー = %v", err)
+		}
 		expected := "my-plan"
 
 		if result != expected {
@@ -222,7 +228,10 @@ func TestBuildPostName(t *testing.T) {
 内容`
 		filename := "fallback.md"
 
-		result := buildPostName(content, filename)
+		result, err := buildPostName(content, filename)
+		if err != nil {
+			t.Fatalf("buildPostName() エラー = %v", err)
+		}
 		expected := "fallback"
 
 		if result != expected {
@@ -236,7 +245,10 @@ func TestBuildPostName(t *testing.T) {
 内容`
 		filename := "plan.md"
 
-		result := buildPostName(content, filename)
+		result, err := buildPostName(content, filename)
+		if err != nil {
+			t.Fatalf("buildPostName() エラー = %v", err)
+		}
 		expected := "タイトル"
 
 		if result != expected {
@@ -248,11 +260,29 @@ func TestBuildPostName(t *testing.T) {
 		content := "内容のみで見出しなし"
 		filename := "plan-#123/test.md"
 
-		result := buildPostName(content, filename)
+		result, err := buildPostName(content, filename)
+		if err != nil {
+			t.Fatalf("buildPostName() エラー = %v", err)
+		}
 		expected := "plan-_123_test"
 
 		if result != expected {
 			t.Errorf("buildPostName() = %v, want %v", result, expected)
+		}
+	})
+
+	t.Run("サニタイズ後にタイトルが空文字の場合にエラーを返す", func(t *testing.T) {
+		content := "内容のみで見出しなし"
+		// 制御文字だけのファイル名（サニタイズで全て除去される）
+		filename := "\n\t.md"
+
+		_, err := buildPostName(content, filename)
+		if err == nil {
+			t.Error("buildPostName() エラーが期待されましたが、nilが返されました")
+		}
+
+		if !strings.Contains(err.Error(), "empty") {
+			t.Errorf("buildPostName() エラーメッセージに 'empty' が含まれていません: %v", err)
 		}
 	})
 }
