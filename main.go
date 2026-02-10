@@ -121,16 +121,19 @@ func run(configPath string, dryRun bool, poster EsaPoster) error {
 	}
 
 	// 5. 既存記事を検索
-	searchQuery := fmt.Sprintf(`name:"%s" in:%s`, postName, category)
+	searchQuery := fmt.Sprintf(`name:"%s" in:"%s"`, postName, category)
 	searchResults, err := poster.SearchPosts(searchQuery)
 	if err != nil {
 		return fmt.Errorf("failed to search posts: %w", err)
 	}
 
 	var existingPostNumber int
-	if len(searchResults) > 0 {
-		// 完全一致する記事が見つかった場合
-		existingPostNumber = searchResults[0].Number
+	for _, result := range searchResults {
+		// 名前とカテゴリが完全一致する記事を探す
+		if result.Name == postName && result.Category == category {
+			existingPostNumber = result.Number
+			break
+		}
 	}
 
 	// 6. dry-runの場合: タイトル・本文・カテゴリを表示して終了
