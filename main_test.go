@@ -42,6 +42,7 @@ type mockEsaPoster struct {
 	searchResults    []EsaSearchResult
 	searchError      error
 	searchCalled     bool
+	lastSearchQuery  string
 	updatePostCalled bool
 	updatePostError  error
 }
@@ -56,6 +57,7 @@ func (m *mockEsaPoster) CreatePost(post EsaPost) (*EsaPostResponse, error) {
 
 func (m *mockEsaPoster) SearchPosts(query string) ([]EsaSearchResult, error) {
 	m.searchCalled = true
+	m.lastSearchQuery = query
 	if m.searchError != nil {
 		return nil, m.searchError
 	}
@@ -454,6 +456,131 @@ post:
 
 		if !mock.createPostCalled {
 			t.Error("run() CreatePostが呼ばれませんでした")
+		}
+	})
+
+	t.Run("スペースを含むカテゴリで検索クエリにダブルクォートが付く", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_ = os.Setenv("CLAUDE_CODE_TMPDIR", tmpDir)
+		defer func() {
+			_ = os.Unsetenv("CLAUDE_CODE_TMPDIR")
+		}()
+
+		configPath := filepath.Join(tmpDir, "config.yaml")
+		configContent := `esa:
+  team_name: "test-team"
+post:
+  category: "Claude Code/Plans"
+`
+		if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+			t.Fatalf("設定ファイルの作成に失敗: %v", err)
+		}
+
+		plansDir := filepath.Join(tmpDir, "plans")
+		if err := os.MkdirAll(plansDir, 0755); err != nil {
+			t.Fatalf("plansディレクトリの作成に失敗: %v", err)
+		}
+		planFile := filepath.Join(plansDir, "test.md")
+		planContent := `# テストプラン
+
+## 内容
+スペース含むカテゴリのテスト
+`
+		if err := os.WriteFile(planFile, []byte(planContent), 0600); err != nil {
+			t.Fatalf("プランファイルの作成に失敗: %v", err)
+		}
+
+		_ = os.Setenv("ESA_ACCESS_TOKEN", "test-token")
+		defer func() {
+			_ = os.Unsetenv("ESA_ACCESS_TOKEN")
+		}()
+
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{},
+			response: &EsaPostResponse{
+				Number: 100,
+				URL:    "https://test-team.esa.io/posts/100",
+			},
+		}
+
+		err := run(configPath, false, mock)
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+
+		// 検索クエリにin:"が含まれることを確認
+		if !strings.Contains(mock.lastSearchQuery, `in:"`) {
+			t.Errorf("検索クエリに in:\" が含まれていません: %s", mock.lastSearchQuery)
+		}
+
+		// カテゴリ全体がクォートで囲まれていることを確認（例: in:"Claude Code/Plans/2026/02/11"）
+		expectedCategory := "Claude Code/Plans"
+		if !strings.Contains(mock.lastSearchQuery, expectedCategory) {
+			t.Errorf("検索クエリにカテゴリ %s が含まれていません: %s", expectedCategory, mock.lastSearchQuery)
+		}
+	})
+
+	t.Run("検索結果にName/Categoryが異なる記事が含まれる場合は無視してCreatePostする", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_ = os.Setenv("CLAUDE_CODE_TMPDIR", tmpDir)
+		defer func() {
+			_ = os.Unsetenv("CLAUDE_CODE_TMPDIR")
+		}()
+
+		configPath := filepath.Join(tmpDir, "config.yaml")
+		configContent := `esa:
+  team_name: "test-team"
+post:
+  category: "Test/Plans"
+`
+		if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+			t.Fatalf("設定ファイルの作成に失敗: %v", err)
+		}
+
+		plansDir := filepath.Join(tmpDir, "plans")
+		if err := os.MkdirAll(plansDir, 0755); err != nil {
+			t.Fatalf("plansディレクトリの作成に失敗: %v", err)
+		}
+		planFile := filepath.Join(plansDir, "test.md")
+		planContent := `# マッチテスト
+
+## 内容
+厳密一致のテスト
+`
+		if err := os.WriteFile(planFile, []byte(planContent), 0600); err != nil {
+			t.Fatalf("プランファイルの作成に失敗: %v", err)
+		}
+
+		_ = os.Setenv("ESA_ACCESS_TOKEN", "test-token")
+		defer func() {
+			_ = os.Unsetenv("ESA_ACCESS_TOKEN")
+		}()
+
+		// 検索結果にはサフィックス付きの記事のみが返る（Name/Categoryが完全一致しない）
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				{Number: 200, Name: "マッチテスト (1)", Category: "Test/Plans/2026/02/11"},
+				{Number: 201, Name: "マッチテスト (2)", Category: "Test/Plans/2026/02/11"},
+			},
+			response: &EsaPostResponse{
+				Number: 300,
+				URL:    "https://test-team.esa.io/posts/300",
+			},
+		}
+
+		err := run(configPath, false, mock)
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+
+		// Name/Categoryが完全一致しないので、CreatePostが呼ばれる
+		if !mock.createPostCalled {
+			t.Error("run() CreatePostが呼ばれませんでした")
+		}
+
+		// UpdatePostは呼ばれない
+		if mock.updatePostCalled {
+			t.Error("run() UpdatePostが呼ばれましたが、呼ばれないはずです")
 		}
 	})
 }
