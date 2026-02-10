@@ -15,6 +15,15 @@ var ErrNoPlanFiles = errors.New("no plan files found")
 
 // findLatestPlanFile は最新のプランファイルを検索します
 func findLatestPlanFile(plansDir string) (string, error) {
+	// plansがディレクトリであることを確認
+	info, err := os.Stat(plansDir)
+	if err != nil {
+		return "", fmt.Errorf("failed to stat plans directory: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("plans path is not a directory: %s", plansDir)
+	}
+
 	entries, err := os.ReadDir(plansDir)
 	if err != nil {
 		return "", fmt.Errorf("failed to read plans directory: %w", err)

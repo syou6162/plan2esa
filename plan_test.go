@@ -68,6 +68,23 @@ func TestFindLatestPlanFile(t *testing.T) {
 			t.Error("findLatestPlanFile() エラーが期待されましたが、nilが返されました")
 		}
 	})
+
+	t.Run("plansがディレクトリでなくファイルの場合にエラーを返す", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		plansFile := filepath.Join(tmpDir, "plans")
+		if err := os.WriteFile(plansFile, []byte("dummy"), 0600); err != nil {
+			t.Fatalf("plansファイルの作成に失敗: %v", err)
+		}
+
+		_, err := findLatestPlanFile(plansFile)
+		if err == nil {
+			t.Error("findLatestPlanFile() エラーが期待されましたが、nilが返されました")
+		}
+
+		if !strings.Contains(err.Error(), "not a directory") {
+			t.Errorf("findLatestPlanFile() エラーメッセージに 'not a directory' が含まれていません: %v", err)
+		}
+	})
 }
 
 func TestExtractTitle(t *testing.T) {
