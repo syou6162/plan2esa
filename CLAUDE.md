@@ -2,7 +2,7 @@
 
 ## プロジェクト概要
 
-`plan2esa`は、Claude Codeのプランファイル（`.claude_work/plans/*.md`）をesa.ioに自動投稿するCLIツールです。SessionEndフックから呼び出され、プランファイルをナレッジとして蓄積します。
+`plan2esa`は、Claude Codeのプランファイル（`$CLAUDE_CODE_TMPDIR/plans/*.md`）をesa.ioに自動投稿するCLIツールです。SessionEndフックから呼び出され、プランファイルをナレッジとして蓄積します。
 
 ## 開発時の注意事項
 

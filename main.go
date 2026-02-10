@@ -16,7 +16,12 @@ func main() {
 
 	// configPathが指定されていない場合はデフォルトパスを使用
 	if *configPath == "" {
-		*configPath = getDefaultConfigPath()
+		defaultPath, err := getDefaultConfigPath()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		*configPath = defaultPath
 	}
 
 	// 実際のEsaClientを作成（run内部で使用）
@@ -104,20 +109,7 @@ func run(configPath string, dryRun bool, poster EsaPoster) error {
 		Tags:     tags,
 	}
 
-	// 4. dry-runの場合: タイトル・本文・カテゴリを表示して終了
-	if dryRun {
-		fmt.Println("=== Dry Run Mode ===")
-		fmt.Printf("Title: %s\n", post.Name)
-		fmt.Printf("Category: %s\n", post.Category)
-		fmt.Printf("Tags: %v\n", post.Tags)
-		fmt.Printf("WIP: %v\n", post.Wip)
-		fmt.Println("\n--- Body ---")
-		fmt.Println(post.BodyMd)
-		fmt.Println("------------")
-		return nil
-	}
-
-	// 5. dry-runでない場合: token取得 → API呼び出し
+	// 4. token取得（検索に必要）
 	accessToken, err := getAccessToken()
 	if err != nil {
 		return err
@@ -128,12 +120,55 @@ func run(configPath string, dryRun bool, poster EsaPoster) error {
 		poster = NewEsaClient(config.Esa.TeamName, accessToken)
 	}
 
-	result, err := poster.CreatePost(post)
+	// 5. 既存記事を検索
+	searchQuery := fmt.Sprintf(`name:"%s" in:%s`, postName, category)
+	searchResults, err := poster.SearchPosts(searchQuery)
 	if err != nil {
-		return fmt.Errorf("failed to create post: %w", err)
+		return fmt.Errorf("failed to search posts: %w", err)
 	}
 
-	fmt.Printf("Posted successfully!\n")
+	var existingPostNumber int
+	if len(searchResults) > 0 {
+		// 完全一致する記事が見つかった場合
+		existingPostNumber = searchResults[0].Number
+	}
+
+	// 6. dry-runの場合: タイトル・本文・カテゴリを表示して終了
+	if dryRun {
+		fmt.Println("=== Dry Run Mode ===")
+		fmt.Printf("Title: %s\n", post.Name)
+		fmt.Printf("Category: %s\n", post.Category)
+		fmt.Printf("Tags: %v\n", post.Tags)
+		fmt.Printf("WIP: %v\n", post.Wip)
+		if existingPostNumber > 0 {
+			fmt.Printf("\n既存記事が見つかりました (Post #%d) - 上書き更新します\n", existingPostNumber)
+		} else {
+			fmt.Println("\n既存記事が見つかりませんでした - 新規作成します")
+		}
+		fmt.Println("\n--- Body ---")
+		fmt.Println(post.BodyMd)
+		fmt.Println("------------")
+		return nil
+	}
+
+	// 7. 投稿または更新
+	var result *EsaPostResponse
+	if existingPostNumber > 0 {
+		// 既存記事を更新
+		result, err = poster.UpdatePost(existingPostNumber, post)
+		if err != nil {
+			return fmt.Errorf("failed to update post: %w", err)
+		}
+		fmt.Printf("Updated successfully!\n")
+	} else {
+		// 新規作成
+		result, err = poster.CreatePost(post)
+		if err != nil {
+			return fmt.Errorf("failed to create post: %w", err)
+		}
+		fmt.Printf("Posted successfully!\n")
+	}
+
 	fmt.Printf("Number: %d\n", result.Number)
 	fmt.Printf("URL: %s\n", result.URL)
 

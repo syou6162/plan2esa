@@ -118,6 +118,32 @@ func TestValidateConfig(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("categoryが空の場合にエラーを返す", func(t *testing.T) {
+		config := &Config{}
+		config.Esa.TeamName = "valid-team"
+		config.Post.Category = ""
+
+		err := validateConfig(config)
+		if err == nil {
+			t.Error("validateConfig() エラーが期待されましたが、nilが返されました")
+		}
+	})
+
+	t.Run("categoryの末尾スラッシュが除去される", func(t *testing.T) {
+		config := &Config{}
+		config.Esa.TeamName = "valid-team"
+		config.Post.Category = "Claude Code/plans/"
+
+		err := validateConfig(config)
+		if err != nil {
+			t.Fatalf("validateConfig() エラー = %v", err)
+		}
+
+		if config.Post.Category != "Claude Code/plans" {
+			t.Errorf("category = %v, want %v", config.Post.Category, "Claude Code/plans")
+		}
+	})
 }
 
 func TestGetAccessToken(t *testing.T) {
@@ -190,7 +216,11 @@ func TestGetDefaultConfigPath(t *testing.T) {
 		os.Setenv("XDG_CONFIG_HOME", "/tmp/xdg")
 		defer os.Unsetenv("XDG_CONFIG_HOME")
 
-		path := getDefaultConfigPath()
+		path, err := getDefaultConfigPath()
+		if err != nil {
+			t.Fatalf("getDefaultConfigPath() エラー = %v", err)
+		}
+
 		expected := "/tmp/xdg/plan2esa/config.yaml"
 
 		if path != expected {
@@ -201,7 +231,11 @@ func TestGetDefaultConfigPath(t *testing.T) {
 	t.Run("XDG_CONFIG_HOMEが未設定の場合", func(t *testing.T) {
 		os.Unsetenv("XDG_CONFIG_HOME")
 
-		path := getDefaultConfigPath()
+		path, err := getDefaultConfigPath()
+		if err != nil {
+			t.Fatalf("getDefaultConfigPath() エラー = %v", err)
+		}
+
 		homeDir, _ := os.UserHomeDir()
 		expected := filepath.Join(homeDir, ".config", "plan2esa", "config.yaml")
 

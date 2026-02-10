@@ -4,7 +4,7 @@ Claude Codeのプランファイルをesa.ioに自動投稿するCLIツールで
 
 ## 概要
 
-Claude CodeのSessionEndフックから呼び出すことで、`.claude_work/plans/`配下に生成されたプランファイル（Markdown）をesa.ioに自動投稿します。プランファイルはgitignore対象のため、ブランチ削除と共に失われてしまいますが、本ツールを使うことでナレッジとして蓄積できます。
+Claude CodeのSessionEndフックから呼び出すことで、`$CLAUDE_CODE_TMPDIR/plans/`配下に生成されたプランファイル（Markdown）をesa.ioに自動投稿します。プランファイルはgitignore対象のため、ブランチ削除と共に失われてしまいますが、本ツールを使うことでナレッジとして蓄積できます。
 
 ## 特徴
 
@@ -45,7 +45,7 @@ go build -o plan2esa .
 
 ```yaml
 esa:
-  team_name: "yasuhisa"  # あなたのesa.ioチーム名
+  team_name: "your-team-name"  # あなたのesa.ioチーム名
 post:
   category: "Claude Code/plans"  # カテゴリ（実際の投稿時は末尾に /yyyy/mm/dd が自動付与される）
 ```
@@ -55,20 +55,6 @@ post:
 esa.ioのアクセストークンは環境変数で指定します：
 
 ```bash
-export ESA_ACCESS_TOKEN="your_esa_access_token_here"
-```
-
-アクセストークンの取得方法：
-1. esa.ioにログイン
-2. Settings → Applications → Personal access tokens
-3. "Generate new token"をクリック
-4. 必要な権限（`read`と`write`）を選択
-5. 生成されたトークンをコピー
-
-`.bashrc`や`.zshrc`に追加しておくと便利です：
-
-```bash
-# ~/.bashrc or ~/.zshrc
 export ESA_ACCESS_TOKEN="your_esa_access_token_here"
 ```
 
@@ -114,6 +100,30 @@ Claude Codeの設定ファイル（`~/.claude/settings.json`）にSessionEndフ�
 ```
 
 これにより、Claude Codeのセッション終了時に自動的にプランファイルがesa.ioに投稿されます。
+
+#### cchookを使う場合
+
+[cchook](https://github.com/syou6162/cchook)を使うと、より高度なフック管理ができます：
+
+```json
+{
+  "hooks": {
+    "SessionEnd": {
+      "command": "cchook -event SessionEnd",
+      "blocking": false
+    }
+  }
+}
+```
+
+cchookの設定ファイル（`~/.config/cchook/config.yaml`）：
+
+```yaml
+hooks:
+  SessionEnd:
+    - command: plan2esa
+      description: "プランファイルをesa.ioに投稿"
+```
 
 ## 動作仕様
 

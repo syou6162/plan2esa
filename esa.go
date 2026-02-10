@@ -28,9 +28,23 @@ type EsaPostResponse struct {
 	URL    string `json:"url"`
 }
 
+// EsaSearchResult は記事検索結果の1件
+type EsaSearchResult struct {
+	Number   int    `json:"number"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+}
+
+// EsaSearchResponse は記事検索レスポンス
+type EsaSearchResponse struct {
+	Posts []EsaSearchResult `json:"posts"`
+}
+
 // EsaPoster はesa.io投稿インターフェース
 type EsaPoster interface {
 	CreatePost(post EsaPost) (*EsaPostResponse, error)
+	SearchPosts(query string) ([]EsaSearchResult, error)
+	UpdatePost(postNumber int, post EsaPost) (*EsaPostResponse, error)
 }
 
 // EsaClient はesa.io APIクライアント
@@ -92,7 +106,116 @@ func (c *EsaClient) CreatePost(post EsaPost) (*EsaPostResponse, error) {
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	// レスポンスボディを制限付きで読み込み（10MB上限+1バイトで超過検知）
+	const maxResponseSize = 10 * 1024 * 1024
+	limitedReader := io.LimitReader(resp.Body, maxResponseSize+1)
+	respBody, err := io.ReadAll(limitedReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// レスポンスサイズが上限を超えている場合はエラー
+	if len(respBody) > maxResponseSize {
+		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseSize)
+	}
+
+	// ステータスコードチェック
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// エラーメッセージをサニタイズ（最大500文字、制御文字除去）
+		errMsg := sanitizeErrorMessage(string(respBody))
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, errMsg)
+	}
+
+	// レスポンスをパース
+	var result EsaPostResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &result, nil
+}
+
+// SearchPosts は記事を検索します
+func (c *EsaClient) SearchPosts(query string) ([]EsaSearchResult, error) {
+	url := fmt.Sprintf("https://api.esa.io/v1/teams/%s/posts?q=%s", c.TeamName, query)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	// レスポンスボディを制限付きで読み込み（10MB上限+1バイトで超過検知）
+	const maxResponseSize = 10 * 1024 * 1024
+	limitedReader := io.LimitReader(resp.Body, maxResponseSize+1)
+	respBody, err := io.ReadAll(limitedReader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	// レスポンスサイズが上限を超えている場合はエラー
+	if len(respBody) > maxResponseSize {
+		return nil, fmt.Errorf("response body exceeds %d bytes", maxResponseSize)
+	}
+
+	// ステータスコードチェック
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// エラーメッセージをサニタイズ（最大500文字、制御文字除去）
+		errMsg := sanitizeErrorMessage(string(respBody))
+		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, errMsg)
+	}
+
+	// レスポンスをパース
+	var result EsaSearchResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return result.Posts, nil
+}
+
+// UpdatePost は既存記事を更新します
+func (c *EsaClient) UpdatePost(postNumber int, post EsaPost) (*EsaPostResponse, error) {
+	url := fmt.Sprintf("https://api.esa.io/v1/teams/%s/posts/%d", c.TeamName, postNumber)
+
+	// esa.io APIは {"post": {...}} 形式を要求
+	wrapped := map[string]interface{}{
+		"post": post,
+	}
+
+	jsonData, err := json.Marshal(wrapped)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequest("PATCH", url, bytes.NewReader(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// レスポンスボディを制限付きで読み込み（10MB上限+1バイトで超過検知）
 	const maxResponseSize = 10 * 1024 * 1024
