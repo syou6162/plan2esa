@@ -115,8 +115,7 @@ func TestRemoveTitle(t *testing.T) {
 ## セクション1
 内容`
 		result := removeTitle(content)
-		expected := `
-## セクション1
+		expected := `## セクション1
 内容`
 
 		if result != expected {

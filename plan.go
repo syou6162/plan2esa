@@ -69,8 +69,8 @@ func removeTitle(content string) string {
 	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "# ") {
-			// この行を除去して残りを結合
-			return strings.Join(lines[i+1:], "\n")
+			// この行を除去して残りを結合し、先頭の空白・改行をトリム
+			return strings.TrimSpace(strings.Join(lines[i+1:], "\n"))
 		}
 	}
 	return content
