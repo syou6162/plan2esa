@@ -4,16 +4,19 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"net/url"
 	"testing"
 )
 
 // mockTransport はHTTPリクエストをモックするためのhttp.RoundTripper
 type mockTransport struct {
-	response *http.Response
-	err      error
+	response    *http.Response
+	err         error
+	lastRequest *http.Request
 }
 
 func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	m.lastRequest = req
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -193,6 +196,65 @@ func TestEsaClientSearchPosts(t *testing.T) {
 
 		if len(results) != 0 {
 			t.Errorf("SearchPosts() 結果数 = %v, want 0", len(results))
+		}
+	})
+
+	t.Run("検索クエリがURLエンコードされる", func(t *testing.T) {
+		responseBody := `{"posts": []}`
+
+		mockTransport := &mockTransport{
+			response: &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(responseBody)),
+				Header:     make(http.Header),
+			},
+		}
+
+		mockClient := &http.Client{
+			Transport: mockTransport,
+		}
+
+		client := &EsaClient{
+			TeamName:    "test",
+			AccessToken: "token",
+			HTTPClient:  mockClient,
+		}
+
+		// スペース、ダブルクォート、スラッシュ、コロン、日本語を含むクエリ
+		query := `name:"テスト記事" in:Test/2026/02/11`
+		_, err := client.SearchPosts(query)
+		if err != nil {
+			t.Fatalf("SearchPosts() エラー = %v", err)
+		}
+
+		// リクエストURLがキャプチャされていることを確認
+		if mockTransport.lastRequest == nil {
+			t.Fatal("lastRequest が nil です")
+		}
+
+		// RawQueryを取得
+		actualRawQuery := mockTransport.lastRequest.URL.RawQuery
+
+		// 期待値を生成（url.Valuesを使って同じ方法でエンコード）
+		expectedParams := url.Values{}
+		expectedParams.Set("q", query)
+		expectedRawQuery := expectedParams.Encode()
+
+		// RawQueryを比較（url.Valuesはスペースを+にエンコードする）
+		if actualRawQuery != expectedRawQuery {
+			t.Errorf("RawQuery = %v, want %v", actualRawQuery, expectedRawQuery)
+		}
+
+		// 重要な文字が正しくエンコードされていることを個別確認
+		if actualRawQuery == "" {
+			t.Error("RawQuery が空です")
+		}
+
+		// クエリパラメータをデコードして確認
+		parsedQuery := mockTransport.lastRequest.URL.Query()
+		actualQuery := parsedQuery.Get("q")
+		if actualQuery != query {
+			t.Errorf("デコードされたクエリ = %v, want %v", actualQuery, query)
 		}
 	})
 }

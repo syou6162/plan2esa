@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 	"unicode"
@@ -141,9 +142,12 @@ func (c *EsaClient) CreatePost(post EsaPost) (*EsaPostResponse, error) {
 
 // SearchPosts は記事を検索します
 func (c *EsaClient) SearchPosts(query string) ([]EsaSearchResult, error) {
-	url := fmt.Sprintf("https://api.esa.io/v1/teams/%s/posts?q=%s", c.TeamName, query)
+	baseURL := fmt.Sprintf("https://api.esa.io/v1/teams/%s/posts", c.TeamName)
+	params := url.Values{}
+	params.Set("q", query)
+	fullURL := baseURL + "?" + params.Encode()
 
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest("GET", fullURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
