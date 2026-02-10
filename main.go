@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -54,7 +55,7 @@ func run(configPath string, dryRun bool, poster EsaPoster) error {
 	planFile, err := findLatestPlanFile(plansDir)
 	if err != nil {
 		// プランファイルが見つからない場合はノーオペで正常終了
-		if err.Error() == fmt.Sprintf("no .md files found in %s", plansDir) {
+		if errors.Is(err, ErrNoPlanFiles) {
 			return nil
 		}
 		return err

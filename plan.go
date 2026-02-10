@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,6 +9,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 )
+
+// ErrNoPlanFiles はプランファイルが見つからない場合のエラー
+var ErrNoPlanFiles = errors.New("no plan files found")
 
 // findLatestPlanFile は最新のプランファイルを検索します
 func findLatestPlanFile(plansDir string) (string, error) {
@@ -41,7 +45,7 @@ func findLatestPlanFile(plansDir string) (string, error) {
 	}
 
 	if latestFile == "" {
-		return "", fmt.Errorf("no .md files found in %s", plansDir)
+		return "", ErrNoPlanFiles
 	}
 
 	return latestFile, nil
