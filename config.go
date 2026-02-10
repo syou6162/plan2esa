@@ -54,6 +54,14 @@ func validateConfig(config *Config) error {
 		}
 	}
 
+	// categoryの検証
+	if config.Post.Category == "" {
+		return fmt.Errorf("category cannot be empty")
+	}
+
+	// 末尾の / を除去
+	config.Post.Category = strings.TrimSuffix(config.Post.Category, "/")
+
 	return nil
 }
 
