@@ -41,6 +41,7 @@ type mockEsaPoster struct {
 	response         *EsaPostResponse
 	searchResults    []EsaSearchResult
 	searchError      error
+	searchCalled     bool
 	updatePostCalled bool
 	updatePostError  error
 }
@@ -54,6 +55,7 @@ func (m *mockEsaPoster) CreatePost(post EsaPost) (*EsaPostResponse, error) {
 }
 
 func (m *mockEsaPoster) SearchPosts(query string) ([]EsaSearchResult, error) {
+	m.searchCalled = true
 	if m.searchError != nil {
 		return nil, m.searchError
 	}
@@ -155,6 +157,7 @@ post:
 				Number: 123,
 				URL:    "https://test-team.esa.io/posts/123",
 			},
+			searchResults: []EsaSearchResult{}, // 検索結果0件
 		}
 
 		err := run(configPath, false, mock)
@@ -163,8 +166,19 @@ post:
 			t.Fatalf("run() エラー = %v", err)
 		}
 
+		// SearchPostsが呼ばれたことを確認
+		if !mock.searchCalled {
+			t.Error("run() SearchPostsが呼ばれませんでした")
+		}
+
+		// 検索結果が0件なのでCreatePostが呼ばれることを確認
 		if !mock.createPostCalled {
 			t.Error("run() CreatePostが呼ばれませんでした")
+		}
+
+		// 検索結果が0件なのでUpdatePostは呼ばれないことを確認
+		if mock.updatePostCalled {
+			t.Error("run() UpdatePostが呼ばれましたが、呼ばれないはずです")
 		}
 	})
 
