@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGetPlansDir(t *testing.T) {
@@ -325,9 +326,13 @@ post:
 			_ = os.Unsetenv("ESA_ACCESS_TOKEN")
 		}()
 
+		// 実行時の日付に基づいてカテゴリを構築
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+
 		mock := &mockEsaPoster{
 			searchResults: []EsaSearchResult{
-				{Number: 999, Name: "既存タイトル", Category: "Test/Plans/2026/02/11"},
+				{Number: 999, Name: "既存タイトル", Category: expectedCategory},
 			},
 			response: &EsaPostResponse{
 				Number: 999,
