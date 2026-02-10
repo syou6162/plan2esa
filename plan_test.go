@@ -244,6 +244,18 @@ func TestBuildPostName(t *testing.T) {
 			t.Errorf("buildPostName() = %v, want %v", result, expected)
 		}
 	})
+
+	t.Run("ファイル名フォールバック時にサニタイズが適用される", func(t *testing.T) {
+		content := "内容のみで見出しなし"
+		filename := "plan-#123/test.md"
+
+		result := buildPostName(content, filename)
+		expected := "plan-_123_test"
+
+		if result != expected {
+			t.Errorf("buildPostName() = %v, want %v", result, expected)
+		}
+	})
 }
 
 // isValidUTF8 はUTF-8として有効かチェックするヘルパー

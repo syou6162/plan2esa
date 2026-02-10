@@ -129,6 +129,9 @@ func buildPostName(content, filename string) string {
 	// 空文字ならファイル名にフォールバック
 	if title == "" {
 		title = strings.TrimSuffix(filename, ".md")
+		// ファイル名もサニタイズする
+		title = sanitizePostName(title)
+		title = strings.TrimSpace(title)
 	}
 
 	return title
