@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# Built binary
+plan2esa
+
 # Test binary, built with `go test -c`
 *.test
 
