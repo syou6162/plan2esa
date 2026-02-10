@@ -101,6 +101,30 @@ Claude Codeの設定ファイル（`~/.claude/settings.json`）にSessionEndフ�
 
 これにより、Claude Codeのセッション終了時に自動的にプランファイルがesa.ioに投稿されます。
 
+#### cchookを使う場合
+
+[cchook](https://github.com/syou6162/cchook)を使うと、より高度なフック管理ができます：
+
+```json
+{
+  "hooks": {
+    "SessionEnd": {
+      "command": "cchook -event SessionEnd",
+      "blocking": false
+    }
+  }
+}
+```
+
+cchookの設定ファイル（`~/.config/cchook/config.yaml`）：
+
+```yaml
+hooks:
+  SessionEnd:
+    - command: plan2esa
+      description: "プランファイルをesa.ioに投稿"
+```
+
 ## 動作仕様
 
 ### プランファイルの処理順序
