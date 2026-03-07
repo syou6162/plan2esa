@@ -402,6 +402,65 @@ post:
 	})
 }
 
+func TestRunTimestampSkip(t *testing.T) {
+	setupTestEnv := func(t *testing.T) (tmpDir, configPath, planFile string) {
+		t.Helper()
+		tmpDir = t.TempDir()
+		t.Setenv("CLAUDE_CODE_TMPDIR", tmpDir)
+		t.Setenv("ESA_ACCESS_TOKEN", "test-token")
+
+		configPath = filepath.Join(tmpDir, "config.yaml")
+		configContent := "esa:\n  team_name: \"test-team\"\npost:\n  category: \"Test/Plans\"\n"
+		if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+			t.Fatalf("設定ファイルの作成に失敗: %v", err)
+		}
+
+		plansDir := filepath.Join(tmpDir, "plans")
+		if err := os.MkdirAll(plansDir, 0755); err != nil {
+			t.Fatalf("plansディレクトリの作成に失敗: %v", err)
+		}
+		planFile = filepath.Join(plansDir, "plan.md")
+		if err := os.WriteFile(planFile, []byte("# スキップテスト\n本文"), 0600); err != nil {
+			t.Fatalf("プランファイルの作成に失敗: %v", err)
+		}
+		return
+	}
+
+	t.Run("ローカルファイルがesa側より古い場合にスキップする", func(t *testing.T) {
+		_, configPath, planFile := setupTestEnv(t)
+
+		// ローカルファイルのModTimeを過去に設定
+		pastTime := time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC)
+		if err := os.Chtimes(planFile, pastTime, pastTime); err != nil {
+			t.Fatalf("os.Chtimes() エラー = %v", err)
+		}
+
+		// esa側のUpdatedAtは未来
+		esaUpdatedAt := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				{Number: 999, Name: "スキップテスト", Category: expectedCategory, UpdatedAt: esaUpdatedAt},
+			},
+			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
+		}
+
+		err := run(configPath, false, mock)
+
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+		if mock.updatePostCalled {
+			t.Error("UpdatePostが呼ばれましたが、スキップされるはずです")
+		}
+		if mock.createPostCalled {
+			t.Error("CreatePostが呼ばれましたが、スキップされるはずです")
+		}
+	})
+
+}
+
 func TestRunIntegration(t *testing.T) {
 	t.Run("エンドツーエンドでプランファイルをesa.ioに投稿する", func(t *testing.T) {
 		tmpDir := t.TempDir()

@@ -128,10 +128,12 @@ func run(configPath string, dryRun bool, poster EsaPoster) error {
 	}
 
 	var existingPostNumber int
+	var existingUpdatedAt time.Time
 	for _, result := range searchResults {
 		// 名前とカテゴリが完全一致する記事を探す
 		if result.Name == postName && result.Category == category {
 			existingPostNumber = result.Number
+			existingUpdatedAt = result.UpdatedAt
 			break
 		}
 	}
@@ -157,6 +159,18 @@ func run(configPath string, dryRun bool, poster EsaPoster) error {
 	// 7. 投稿または更新
 	var result *EsaPostResponse
 	if existingPostNumber > 0 {
+		// ローカルファイルのタイムスタンプをesa側と比較
+		fileInfo, err := os.Stat(planFile)
+		if err != nil {
+			return fmt.Errorf("failed to stat plan file: %w", err)
+		}
+		if !existingUpdatedAt.IsZero() && fileInfo.ModTime().Before(existingUpdatedAt) {
+			fmt.Printf("Skipped: local file (%s) is older than esa post #%d (%s)\n",
+				fileInfo.ModTime().Format(time.RFC3339),
+				existingPostNumber,
+				existingUpdatedAt.Format(time.RFC3339))
+			return nil
+		}
 		// 既存記事を更新
 		result, err = poster.UpdatePost(existingPostNumber, post)
 		if err != nil {
