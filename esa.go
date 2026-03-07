@@ -20,6 +20,7 @@ type EsaPost struct {
 	Category string   `json:"category"`
 	Wip      bool     `json:"wip"`
 	Tags     []string `json:"tags,omitempty"`
+	Message  string   `json:"message,omitempty"`
 }
 
 // EsaPostResponse はesa.io投稿レスポンス
