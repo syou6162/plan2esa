@@ -245,6 +245,51 @@ dry-runテスト用のプランファイル
 		}
 	})
 
+	t.Run("dry-runモードでローカルが古い場合にスキップ情報を表示する", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("CLAUDE_CODE_TMPDIR", tmpDir)
+		t.Setenv("ESA_ACCESS_TOKEN", "test-token")
+
+		configPath := filepath.Join(tmpDir, "config.yaml")
+		configContent := "esa:\n  team_name: \"test-team\"\npost:\n  category: \"Test/Plans\"\n"
+		if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+			t.Fatalf("設定ファイルの作成に失敗: %v", err)
+		}
+
+		plansDir := filepath.Join(tmpDir, "plans")
+		if err := os.MkdirAll(plansDir, 0755); err != nil {
+			t.Fatalf("plansディレクトリの作成に失敗: %v", err)
+		}
+		planFile := filepath.Join(plansDir, "plan.md")
+		if err := os.WriteFile(planFile, []byte("# dry-runスキップテスト\n本文"), 0600); err != nil {
+			t.Fatalf("プランファイルの作成に失敗: %v", err)
+		}
+
+		// ローカルファイルのModTimeを過去に設定
+		pastTime := time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC)
+		if err := os.Chtimes(planFile, pastTime, pastTime); err != nil {
+			t.Fatalf("os.Chtimes() エラー = %v", err)
+		}
+
+		esaUpdatedAt := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				{Number: 999, Name: "dry-runスキップテスト", Category: expectedCategory, UpdatedAt: esaUpdatedAt},
+			},
+		}
+
+		err := run(configPath, true, mock)
+
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+		if mock.updatePostCalled {
+			t.Error("dry-runモードでUpdatePostが呼ばれましたが、呼ばれないはずです")
+		}
+	})
+
 	t.Run("CLAUDE_CODE_TMPDIRが未設定の場合にエラーを返す", func(t *testing.T) {
 		os.Unsetenv("CLAUDE_CODE_TMPDIR")
 
@@ -400,6 +445,145 @@ post:
 			t.Errorf("run() エラーメッセージに 'ESA_ACCESS_TOKEN' が含まれていません: %v", err)
 		}
 	})
+}
+
+func TestRunTimestampSkip(t *testing.T) {
+	setupTestEnv := func(t *testing.T) (tmpDir, configPath, planFile string) {
+		t.Helper()
+		tmpDir = t.TempDir()
+		t.Setenv("CLAUDE_CODE_TMPDIR", tmpDir)
+		t.Setenv("ESA_ACCESS_TOKEN", "test-token")
+
+		configPath = filepath.Join(tmpDir, "config.yaml")
+		configContent := "esa:\n  team_name: \"test-team\"\npost:\n  category: \"Test/Plans\"\n"
+		if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+			t.Fatalf("設定ファイルの作成に失敗: %v", err)
+		}
+
+		plansDir := filepath.Join(tmpDir, "plans")
+		if err := os.MkdirAll(plansDir, 0755); err != nil {
+			t.Fatalf("plansディレクトリの作成に失敗: %v", err)
+		}
+		planFile = filepath.Join(plansDir, "plan.md")
+		if err := os.WriteFile(planFile, []byte("# スキップテスト\n本文"), 0600); err != nil {
+			t.Fatalf("プランファイルの作成に失敗: %v", err)
+		}
+		return
+	}
+
+	t.Run("ローカルファイルがesa側より古い場合にスキップする", func(t *testing.T) {
+		_, configPath, planFile := setupTestEnv(t)
+
+		// ローカルファイルのModTimeを過去に設定
+		pastTime := time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC)
+		if err := os.Chtimes(planFile, pastTime, pastTime); err != nil {
+			t.Fatalf("os.Chtimes() エラー = %v", err)
+		}
+
+		// esa側のUpdatedAtは未来
+		esaUpdatedAt := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				{Number: 999, Name: "スキップテスト", Category: expectedCategory, UpdatedAt: esaUpdatedAt},
+			},
+			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
+		}
+
+		err := run(configPath, false, mock)
+
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+		if mock.updatePostCalled {
+			t.Error("UpdatePostが呼ばれましたが、スキップされるはずです")
+		}
+		if mock.createPostCalled {
+			t.Error("CreatePostが呼ばれましたが、スキップされるはずです")
+		}
+	})
+
+	t.Run("ローカルファイルがesa側より新しい場合に更新する", func(t *testing.T) {
+		_, configPath, planFile := setupTestEnv(t)
+
+		// esa側のUpdatedAtは過去
+		esaUpdatedAt := time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC)
+		// ローカルファイルのModTimeを未来に設定
+		futureTime := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+		if err := os.Chtimes(planFile, futureTime, futureTime); err != nil {
+			t.Fatalf("os.Chtimes() エラー = %v", err)
+		}
+
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				{Number: 999, Name: "スキップテスト", Category: expectedCategory, UpdatedAt: esaUpdatedAt},
+			},
+			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
+		}
+
+		err := run(configPath, false, mock)
+
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+		if !mock.updatePostCalled {
+			t.Error("UpdatePostが呼ばれませんでした")
+		}
+	})
+
+	t.Run("同一タイムスタンプの場合に更新する", func(t *testing.T) {
+		_, configPath, planFile := setupTestEnv(t)
+
+		sameTime := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+		if err := os.Chtimes(planFile, sameTime, sameTime); err != nil {
+			t.Fatalf("os.Chtimes() エラー = %v", err)
+		}
+
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				{Number: 999, Name: "スキップテスト", Category: expectedCategory, UpdatedAt: sameTime},
+			},
+			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
+		}
+
+		err := run(configPath, false, mock)
+
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+		if !mock.updatePostCalled {
+			t.Error("UpdatePostが呼ばれませんでした（同一タイムスタンプは更新するはず）")
+		}
+	})
+
+	t.Run("UpdatedAtがゼロ値の場合に従来通り更新する", func(t *testing.T) {
+		_, configPath, _ := setupTestEnv(t)
+
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				// UpdatedAtなし（ゼロ値）
+				{Number: 999, Name: "スキップテスト", Category: expectedCategory},
+			},
+			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
+		}
+
+		err := run(configPath, false, mock)
+
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+		if !mock.updatePostCalled {
+			t.Error("UpdatePostが呼ばれませんでした（UpdatedAtゼロ値は更新するはず）")
+		}
+	})
+
 }
 
 func TestRunIntegration(t *testing.T) {

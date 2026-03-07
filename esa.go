@@ -31,9 +31,10 @@ type EsaPostResponse struct {
 
 // EsaSearchResult は記事検索結果の1件
 type EsaSearchResult struct {
-	Number   int    `json:"number"`
-	Name     string `json:"name"`
-	Category string `json:"category"`
+	Number    int       `json:"number"`
+	Name      string    `json:"name"`
+	Category  string    `json:"category"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // EsaSearchResponse は記事検索レスポンス

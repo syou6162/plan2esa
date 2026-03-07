@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 )
 
 // mockTransport はHTTPリクエストをモックするためのhttp.RoundTripper
@@ -255,6 +257,34 @@ func TestEsaClientSearchPosts(t *testing.T) {
 		actualQuery := parsedQuery.Get("q")
 		if actualQuery != query {
 			t.Errorf("デコードされたクエリ = %v, want %v", actualQuery, query)
+		}
+	})
+}
+
+func TestEsaSearchResultUpdatedAt(t *testing.T) {
+	t.Run("updated_atをJSONからtime.Timeにデシリアライズできる", func(t *testing.T) {
+		jsonStr := `{"posts": [{"number": 1, "name": "テスト", "category": "Test", "updated_at": "2026-03-07T12:00:00+09:00"}]}`
+		var resp EsaSearchResponse
+		if err := json.Unmarshal([]byte(jsonStr), &resp); err != nil {
+			t.Fatalf("Unmarshal() エラー = %v", err)
+		}
+		if len(resp.Posts) != 1 {
+			t.Fatalf("Posts 件数 = %d, want 1", len(resp.Posts))
+		}
+		expected, _ := time.Parse(time.RFC3339, "2026-03-07T12:00:00+09:00")
+		if !resp.Posts[0].UpdatedAt.Equal(expected) {
+			t.Errorf("UpdatedAt = %v, want %v", resp.Posts[0].UpdatedAt, expected)
+		}
+	})
+
+	t.Run("updated_atがない場合はゼロ値になる", func(t *testing.T) {
+		jsonStr := `{"posts": [{"number": 1, "name": "テスト", "category": "Test"}]}`
+		var resp EsaSearchResponse
+		if err := json.Unmarshal([]byte(jsonStr), &resp); err != nil {
+			t.Fatalf("Unmarshal() エラー = %v", err)
+		}
+		if !resp.Posts[0].UpdatedAt.IsZero() {
+			t.Errorf("UpdatedAt = %v, want zero value", resp.Posts[0].UpdatedAt)
 		}
 	})
 }
