@@ -18,6 +18,7 @@ type Config struct {
 	} `yaml:"esa"`
 	Post struct {
 		Category string `yaml:"category"`
+		Message  string `yaml:"message"`
 	} `yaml:"post"`
 }
 

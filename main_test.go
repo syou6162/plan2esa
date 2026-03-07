@@ -39,6 +39,7 @@ func TestGetPlansDir(t *testing.T) {
 type mockEsaPoster struct {
 	createPostCalled bool
 	createPostError  error
+	lastCreatedPost  EsaPost
 	response         *EsaPostResponse
 	searchResults    []EsaSearchResult
 	searchError      error
@@ -46,10 +47,12 @@ type mockEsaPoster struct {
 	lastSearchQuery  string
 	updatePostCalled bool
 	updatePostError  error
+	lastUpdatedPost  EsaPost
 }
 
 func (m *mockEsaPoster) CreatePost(post EsaPost) (*EsaPostResponse, error) {
 	m.createPostCalled = true
+	m.lastCreatedPost = post
 	if m.createPostError != nil {
 		return nil, m.createPostError
 	}
@@ -67,6 +70,7 @@ func (m *mockEsaPoster) SearchPosts(query string) ([]EsaSearchResult, error) {
 
 func (m *mockEsaPoster) UpdatePost(postNumber int, post EsaPost) (*EsaPostResponse, error) {
 	m.updatePostCalled = true
+	m.lastUpdatedPost = post
 	if m.updatePostError != nil {
 		return nil, m.updatePostError
 	}
@@ -82,7 +86,7 @@ func TestRun(t *testing.T) {
 		// plansディレクトリを作成しない
 
 		mock := &mockEsaPoster{}
-		err := run("", false, mock)
+		err := run("", false, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -105,7 +109,7 @@ func TestRun(t *testing.T) {
 		}
 
 		mock := &mockEsaPoster{}
-		err := run("", false, mock)
+		err := run("", false, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -163,7 +167,7 @@ post:
 			searchResults: []EsaSearchResult{}, // 検索結果0件
 		}
 
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -230,7 +234,7 @@ dry-runテスト用のプランファイル
 			searchResults: []EsaSearchResult{}, // 既存記事なし
 		}
 
-		err := run(configPath, true, mock)
+		err := run(configPath, true, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -280,7 +284,7 @@ dry-runテスト用のプランファイル
 			},
 		}
 
-		err := run(configPath, true, mock)
+		err := run(configPath, true, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -294,7 +298,7 @@ dry-runテスト用のプランファイル
 		os.Unsetenv("CLAUDE_CODE_TMPDIR")
 
 		mock := &mockEsaPoster{}
-		err := run("", false, mock)
+		err := run("", false, mock, "")
 
 		if err == nil {
 			t.Error("run() エラーが期待されましたが、nilが返されました")
@@ -327,7 +331,7 @@ dry-runテスト用のプランファイル
 		}
 
 		mock := &mockEsaPoster{}
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 
 		if err == nil {
 			t.Error("run() エラーが期待されましたが、nilが返されました")
@@ -386,7 +390,7 @@ post:
 			},
 		}
 
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -435,7 +439,7 @@ post:
 		os.Unsetenv("ESA_ACCESS_TOKEN")
 
 		mock := &mockEsaPoster{}
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 
 		if err == nil {
 			t.Error("run() エラーが期待されましたが、nilが返されました")
@@ -491,7 +495,7 @@ func TestRunTimestampSkip(t *testing.T) {
 			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
 		}
 
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -524,7 +528,7 @@ func TestRunTimestampSkip(t *testing.T) {
 			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
 		}
 
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -551,7 +555,7 @@ func TestRunTimestampSkip(t *testing.T) {
 			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
 		}
 
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -574,7 +578,7 @@ func TestRunTimestampSkip(t *testing.T) {
 			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
 		}
 
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -584,6 +588,99 @@ func TestRunTimestampSkip(t *testing.T) {
 		}
 	})
 
+}
+
+func TestRunMessage(t *testing.T) {
+	setupEnv := func(t *testing.T, configContent string) (configPath string) {
+		t.Helper()
+		tmpDir := t.TempDir()
+		t.Setenv("CLAUDE_CODE_TMPDIR", tmpDir)
+		t.Setenv("ESA_ACCESS_TOKEN", "test-token")
+
+		configPath = filepath.Join(tmpDir, "config.yaml")
+		if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+			t.Fatalf("設定ファイルの作成に失敗: %v", err)
+		}
+
+		plansDir := filepath.Join(tmpDir, "plans")
+		if err := os.MkdirAll(plansDir, 0755); err != nil {
+			t.Fatalf("plansディレクトリの作成に失敗: %v", err)
+		}
+		planFile := filepath.Join(plansDir, "plan.md")
+		if err := os.WriteFile(planFile, []byte("# messageテスト\n本文"), 0600); err != nil {
+			t.Fatalf("プランファイルの作成に失敗: %v", err)
+		}
+		return
+	}
+
+	t.Run("CLIフラグのmessageが使われる", func(t *testing.T) {
+		configContent := "esa:\n  team_name: \"test-team\"\npost:\n  category: \"Test/Plans\"\n  message: \"configのメモ\"\n"
+		configPath := setupEnv(t, configContent)
+
+		mock := &mockEsaPoster{
+			response:      &EsaPostResponse{Number: 1, URL: "https://test.esa.io/posts/1"},
+			searchResults: []EsaSearchResult{},
+		}
+
+		err := run(configPath, false, mock, "CLIのメモ")
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+
+		if mock.lastCreatedPost.Message != "CLIのメモ" {
+			t.Errorf("Message = %v, want CLIのメモ", mock.lastCreatedPost.Message)
+		}
+	})
+
+	t.Run("CLIフラグがない場合はconfigのmessageが使われる", func(t *testing.T) {
+		configContent := "esa:\n  team_name: \"test-team\"\npost:\n  category: \"Test/Plans\"\n  message: \"configのメモ\"\n"
+		configPath := setupEnv(t, configContent)
+
+		mock := &mockEsaPoster{
+			response:      &EsaPostResponse{Number: 1, URL: "https://test.esa.io/posts/1"},
+			searchResults: []EsaSearchResult{},
+		}
+
+		err := run(configPath, false, mock, "")
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+
+		if mock.lastCreatedPost.Message != "configのメモ" {
+			t.Errorf("Message = %v, want configのメモ", mock.lastCreatedPost.Message)
+		}
+	})
+
+	t.Run("どちらも未指定の場合はmessageが空文字でAPIに送信されない", func(t *testing.T) {
+		configContent := "esa:\n  team_name: \"test-team\"\npost:\n  category: \"Test/Plans\"\n"
+		configPath := setupEnv(t, configContent)
+
+		mock := &mockEsaPoster{
+			response:      &EsaPostResponse{Number: 1, URL: "https://test.esa.io/posts/1"},
+			searchResults: []EsaSearchResult{},
+		}
+
+		err := run(configPath, false, mock, "")
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+
+		if mock.lastCreatedPost.Message != "" {
+			t.Errorf("Message = %v, want 空文字", mock.lastCreatedPost.Message)
+		}
+	})
+
+	t.Run("空白のみのmessageはエラーになる", func(t *testing.T) {
+		configContent := "esa:\n  team_name: \"test-team\"\npost:\n  category: \"Test/Plans\"\n"
+		configPath := setupEnv(t, configContent)
+
+		mock := &mockEsaPoster{}
+
+		err := run(configPath, false, mock, "   ")
+		if err == nil {
+			t.Error("run() エラーが期待されましたが、nilが返されました")
+		}
+	})
 }
 
 func TestRunIntegration(t *testing.T) {
@@ -637,7 +734,7 @@ post:
 			},
 		}
 
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
@@ -692,7 +789,7 @@ post:
 			},
 		}
 
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
 		}
@@ -757,7 +854,7 @@ post:
 			},
 		}
 
-		err := run(configPath, false, mock)
+		err := run(configPath, false, mock, "")
 		if err != nil {
 			t.Fatalf("run() エラー = %v", err)
 		}

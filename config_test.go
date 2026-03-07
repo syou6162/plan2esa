@@ -35,6 +35,53 @@ post:
 		}
 	})
 
+	t.Run("messageが設定されている場合に読み込める", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "config.yaml")
+
+		configContent := `esa:
+  team_name: "yasuhisa"
+post:
+  category: "Claude Code/plans"
+  message: "plan2esaから投稿"
+`
+		if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+			t.Fatalf("設定ファイルの作成に失敗: %v", err)
+		}
+
+		config, err := loadConfig(configPath)
+		if err != nil {
+			t.Fatalf("loadConfig() エラー = %v", err)
+		}
+
+		if config.Post.Message != "plan2esaから投稿" {
+			t.Errorf("message = %v, want plan2esaから投稿", config.Post.Message)
+		}
+	})
+
+	t.Run("messageが未設定の場合は空文字になる", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "config.yaml")
+
+		configContent := `esa:
+  team_name: "yasuhisa"
+post:
+  category: "Claude Code/plans"
+`
+		if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+			t.Fatalf("設定ファイルの作成に失敗: %v", err)
+		}
+
+		config, err := loadConfig(configPath)
+		if err != nil {
+			t.Fatalf("loadConfig() エラー = %v", err)
+		}
+
+		if config.Post.Message != "" {
+			t.Errorf("message = %v, want 空文字", config.Post.Message)
+		}
+	})
+
 	t.Run("設定ファイルが存在しない場合にエラーを返す", func(t *testing.T) {
 		_, err := loadConfig("/nonexistent/config.yaml")
 		if err == nil {

@@ -132,6 +132,89 @@ func TestEsaClientCreatePost(t *testing.T) {
 			t.Error("CreatePost() エラーが期待されましたが、nilが返されました")
 		}
 	})
+
+	t.Run("messageが指定された場合にリクエストボディに含まれる", func(t *testing.T) {
+		responseBody := `{"number": 123, "url": "https://yasuhisa.esa.io/posts/123"}`
+
+		transport := &mockTransport{
+			response: &http.Response{
+				StatusCode: 201,
+				Body:       io.NopCloser(bytes.NewBufferString(responseBody)),
+				Header:     make(http.Header),
+			},
+		}
+
+		client := &EsaClient{
+			TeamName:    "yasuhisa",
+			AccessToken: "test-token",
+			HTTPClient:  &http.Client{Transport: transport},
+		}
+
+		post := EsaPost{
+			Name:     "テスト投稿",
+			BodyMd:   "本文",
+			Category: "Test",
+			Wip:      false,
+			Message:  "テスト用変更メモ",
+		}
+
+		_, err := client.CreatePost(post)
+		if err != nil {
+			t.Fatalf("CreatePost() エラー = %v", err)
+		}
+
+		// リクエストボディを読み取って検証
+		if transport.lastRequest == nil {
+			t.Fatal("lastRequest が nil です")
+		}
+		body, _ := io.ReadAll(transport.lastRequest.Body)
+		var reqBody map[string]map[string]interface{}
+		if err := json.Unmarshal(body, &reqBody); err != nil {
+			t.Fatalf("リクエストボディのパースエラー = %v", err)
+		}
+		if reqBody["post"]["message"] != "テスト用変更メモ" {
+			t.Errorf("message = %v, want テスト用変更メモ", reqBody["post"]["message"])
+		}
+	})
+
+	t.Run("messageが未指定の場合にリクエストボディに含まれない", func(t *testing.T) {
+		responseBody := `{"number": 123, "url": "https://yasuhisa.esa.io/posts/123"}`
+
+		transport := &mockTransport{
+			response: &http.Response{
+				StatusCode: 201,
+				Body:       io.NopCloser(bytes.NewBufferString(responseBody)),
+				Header:     make(http.Header),
+			},
+		}
+
+		client := &EsaClient{
+			TeamName:    "yasuhisa",
+			AccessToken: "test-token",
+			HTTPClient:  &http.Client{Transport: transport},
+		}
+
+		post := EsaPost{
+			Name:     "テスト投稿",
+			BodyMd:   "本文",
+			Category: "Test",
+			Wip:      false,
+		}
+
+		_, err := client.CreatePost(post)
+		if err != nil {
+			t.Fatalf("CreatePost() エラー = %v", err)
+		}
+
+		body, _ := io.ReadAll(transport.lastRequest.Body)
+		var reqBody map[string]map[string]interface{}
+		if err := json.Unmarshal(body, &reqBody); err != nil {
+			t.Fatalf("リクエストボディのパースエラー = %v", err)
+		}
+		if _, ok := reqBody["post"]["message"]; ok {
+			t.Error("messageが未指定なのにリクエストボディに含まれています")
+		}
+	})
 }
 
 func TestEsaClientSearchPosts(t *testing.T) {
@@ -358,6 +441,46 @@ func TestEsaClientUpdatePost(t *testing.T) {
 		_, err := client.UpdatePost(999, post)
 		if err == nil {
 			t.Error("UpdatePost() エラーが期待されましたが、nilが返されました")
+		}
+	})
+
+	t.Run("messageが指定された場合にリクエストボディに含まれる", func(t *testing.T) {
+		responseBody := `{"number": 999, "url": "https://yasuhisa.esa.io/posts/999", "name": "更新後タイトル"}`
+
+		transport := &mockTransport{
+			response: &http.Response{
+				StatusCode: 200,
+				Body:       io.NopCloser(bytes.NewBufferString(responseBody)),
+				Header:     make(http.Header),
+			},
+		}
+
+		client := &EsaClient{
+			TeamName:    "yasuhisa",
+			AccessToken: "test-token",
+			HTTPClient:  &http.Client{Transport: transport},
+		}
+
+		post := EsaPost{
+			Name:     "更新後タイトル",
+			BodyMd:   "更新後本文",
+			Category: "Test",
+			Wip:      false,
+			Message:  "更新メモ",
+		}
+
+		_, err := client.UpdatePost(999, post)
+		if err != nil {
+			t.Fatalf("UpdatePost() エラー = %v", err)
+		}
+
+		body, _ := io.ReadAll(transport.lastRequest.Body)
+		var reqBody map[string]map[string]interface{}
+		if err := json.Unmarshal(body, &reqBody); err != nil {
+			t.Fatalf("リクエストボディのパースエラー = %v", err)
+		}
+		if reqBody["post"]["message"] != "更新メモ" {
+			t.Errorf("message = %v, want 更新メモ", reqBody["post"]["message"])
 		}
 	})
 }

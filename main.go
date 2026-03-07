@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
 func main() {
 	configPath := flag.String("config", "", "Path to config file")
 	dryRun := flag.Bool("dry-run", false, "Show what would be posted without actually posting")
+	message := flag.String("message", "", "Message for the post")
 	flag.Parse()
 
 	// configPathが指定されていない場合はデフォルトパスを使用
@@ -24,10 +26,7 @@ func main() {
 		*configPath = defaultPath
 	}
 
-	// 実際のEsaClientを作成（run内部で使用）
-	// ただし、run()はインターフェースを受け取るので、ここでは作成しない
-	// run()の中でdryRunでない場合のみEsaClientを作成する
-	if err := run(*configPath, *dryRun, nil); err != nil {
+	if err := run(*configPath, *dryRun, nil, *message); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -43,7 +42,7 @@ func getPlansDir() (string, error) {
 }
 
 // run はメインロジックを実行します
-func run(configPath string, dryRun bool, poster EsaPoster) error {
+func run(configPath string, dryRun bool, poster EsaPoster, cliMessage string) error {
 	// 1. plansディレクトリのパスを取得
 	plansDir, err := getPlansDir()
 	if err != nil {
@@ -101,12 +100,23 @@ func run(configPath string, dryRun bool, poster EsaPoster) error {
 		tags = append(tags, repoName)
 	}
 
+	// message決定ロジック: CLIフラグ > config > 未送信
+	resolvedMessage := cliMessage
+	if resolvedMessage == "" {
+		resolvedMessage = config.Post.Message
+	}
+	// 採用されたmessageが空白のみの場合はエラー
+	if resolvedMessage != "" && strings.TrimSpace(resolvedMessage) == "" {
+		return fmt.Errorf("message cannot be whitespace only")
+	}
+
 	post := EsaPost{
 		Name:     postName,
 		BodyMd:   bodyMd,
 		Category: category,
 		Wip:      false,
 		Tags:     tags,
+		Message:  resolvedMessage,
 	}
 
 	// 4. token取得（検索に必要）
@@ -145,6 +155,9 @@ func run(configPath string, dryRun bool, poster EsaPoster) error {
 		fmt.Printf("Category: %s\n", post.Category)
 		fmt.Printf("Tags: %v\n", post.Tags)
 		fmt.Printf("WIP: %v\n", post.Wip)
+		if post.Message != "" {
+			fmt.Printf("Message: %s\n", post.Message)
+		}
 		if existingPostNumber > 0 {
 			fileInfo, err := os.Stat(planFile)
 			if err != nil {
