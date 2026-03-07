@@ -245,6 +245,51 @@ dry-runテスト用のプランファイル
 		}
 	})
 
+	t.Run("dry-runモードでローカルが古い場合にスキップ情報を表示する", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		t.Setenv("CLAUDE_CODE_TMPDIR", tmpDir)
+		t.Setenv("ESA_ACCESS_TOKEN", "test-token")
+
+		configPath := filepath.Join(tmpDir, "config.yaml")
+		configContent := "esa:\n  team_name: \"test-team\"\npost:\n  category: \"Test/Plans\"\n"
+		if err := os.WriteFile(configPath, []byte(configContent), 0600); err != nil {
+			t.Fatalf("設定ファイルの作成に失敗: %v", err)
+		}
+
+		plansDir := filepath.Join(tmpDir, "plans")
+		if err := os.MkdirAll(plansDir, 0755); err != nil {
+			t.Fatalf("plansディレクトリの作成に失敗: %v", err)
+		}
+		planFile := filepath.Join(plansDir, "plan.md")
+		if err := os.WriteFile(planFile, []byte("# dry-runスキップテスト\n本文"), 0600); err != nil {
+			t.Fatalf("プランファイルの作成に失敗: %v", err)
+		}
+
+		// ローカルファイルのModTimeを過去に設定
+		pastTime := time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC)
+		if err := os.Chtimes(planFile, pastTime, pastTime); err != nil {
+			t.Fatalf("os.Chtimes() エラー = %v", err)
+		}
+
+		esaUpdatedAt := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				{Number: 999, Name: "dry-runスキップテスト", Category: expectedCategory, UpdatedAt: esaUpdatedAt},
+			},
+		}
+
+		err := run(configPath, true, mock)
+
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+		if mock.updatePostCalled {
+			t.Error("dry-runモードでUpdatePostが呼ばれましたが、呼ばれないはずです")
+		}
+	})
+
 	t.Run("CLAUDE_CODE_TMPDIRが未設定の場合にエラーを返す", func(t *testing.T) {
 		os.Unsetenv("CLAUDE_CODE_TMPDIR")
 
