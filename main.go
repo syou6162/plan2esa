@@ -155,6 +155,9 @@ func run(configPath string, dryRun bool, poster EsaPoster, cliMessage string) er
 		fmt.Printf("Category: %s\n", post.Category)
 		fmt.Printf("Tags: %v\n", post.Tags)
 		fmt.Printf("WIP: %v\n", post.Wip)
+		if post.Message != "" {
+			fmt.Printf("Message: %s\n", post.Message)
+		}
 		if existingPostNumber > 0 {
 			fileInfo, err := os.Stat(planFile)
 			if err != nil {
