@@ -459,6 +459,86 @@ func TestRunTimestampSkip(t *testing.T) {
 		}
 	})
 
+	t.Run("ローカルファイルがesa側より新しい場合に更新する", func(t *testing.T) {
+		_, configPath, planFile := setupTestEnv(t)
+
+		// esa側のUpdatedAtは過去
+		esaUpdatedAt := time.Date(2026, 3, 7, 10, 0, 0, 0, time.UTC)
+		// ローカルファイルのModTimeを未来に設定
+		futureTime := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+		if err := os.Chtimes(planFile, futureTime, futureTime); err != nil {
+			t.Fatalf("os.Chtimes() エラー = %v", err)
+		}
+
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				{Number: 999, Name: "スキップテスト", Category: expectedCategory, UpdatedAt: esaUpdatedAt},
+			},
+			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
+		}
+
+		err := run(configPath, false, mock)
+
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+		if !mock.updatePostCalled {
+			t.Error("UpdatePostが呼ばれませんでした")
+		}
+	})
+
+	t.Run("同一タイムスタンプの場合に更新する", func(t *testing.T) {
+		_, configPath, planFile := setupTestEnv(t)
+
+		sameTime := time.Date(2026, 3, 7, 12, 0, 0, 0, time.UTC)
+		if err := os.Chtimes(planFile, sameTime, sameTime); err != nil {
+			t.Fatalf("os.Chtimes() エラー = %v", err)
+		}
+
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				{Number: 999, Name: "スキップテスト", Category: expectedCategory, UpdatedAt: sameTime},
+			},
+			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
+		}
+
+		err := run(configPath, false, mock)
+
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+		if !mock.updatePostCalled {
+			t.Error("UpdatePostが呼ばれませんでした（同一タイムスタンプは更新するはず）")
+		}
+	})
+
+	t.Run("UpdatedAtがゼロ値の場合に従来通り更新する", func(t *testing.T) {
+		_, configPath, _ := setupTestEnv(t)
+
+		now := time.Now()
+		expectedCategory := buildCategory("Test/Plans", now)
+		mock := &mockEsaPoster{
+			searchResults: []EsaSearchResult{
+				// UpdatedAtなし（ゼロ値）
+				{Number: 999, Name: "スキップテスト", Category: expectedCategory},
+			},
+			response: &EsaPostResponse{Number: 999, URL: "https://test-team.esa.io/posts/999"},
+		}
+
+		err := run(configPath, false, mock)
+
+		if err != nil {
+			t.Fatalf("run() エラー = %v", err)
+		}
+		if !mock.updatePostCalled {
+			t.Error("UpdatePostが呼ばれませんでした（UpdatedAtゼロ値は更新するはず）")
+		}
+	})
+
 }
 
 func TestRunIntegration(t *testing.T) {
